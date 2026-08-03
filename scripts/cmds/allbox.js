@@ -1,117 +1,107 @@
-const moment = require("moment-timezone");
-
 module.exports = {
   config: {
-    name: "allbox",
-    version: "1.0.0",
-    author: "MOHAMMAD AKASH",
-    countDown: 60,
+    name: "spygc",
+    version: "2.0",
+    author: "SiFu",
     role: 2,
-    shortDescription: "Manage all joined groups",
-    longDescription: "List all groups and reply to Ban, Unban, Delete data, or remove the bot",
-    category: "box chat",
-    usages: "[page number/all]",
+    shortDescription: "Spy group chats bot is in",
+    category: "info",
+    guide: {
+      en: "{pn}spygc → reply with number"
+    }
   },
 
-  onStart: async function ({ event, api, commandName }) {
-    const { threadID, messageID } = event;
+  onStart: async function ({ api, event }) {
+    try {
+      const threads = await api.getThreadList(20, null, ["INBOX"]);
+      const groups = threads.filter(t => t.threadName);
+
+      if (!groups.length) {
+        return api.sendMessage("❌ No group chats found.", event.threadID);
+      }
+
+      let list = groups.map(
+        (g, i) =>
+          `┃ ${i + 1}. ${g.threadName}\n┃    🆔 ${g.threadID}`
+      ).join("\n");
+
+      const msg =
+`┏━━━━━━━━━━━━━━━━━
+┃ 🕵️‍♂️ 𝗚𝗥𝗢𝗨𝗣 𝗦𝗣𝗬 𝗟𝗜𝗦𝗧
+┣━━━━━━━━━━━━━━━━━
+${list}
+┗━━━━━━━━━━━━━━━━━
+✉️ Reply with group number`;
+
+      const sent = await api.sendMessage(msg, event.threadID);
+
+      global.GoatBot.onReply.set(sent.messageID, {
+        commandName: "spygc",
+        author: event.senderID,
+        groupList: groups
+      });
+    } catch (err) {
+      console.error("spygc error:", err);
+      api.sendMessage("❌ Failed to fetch group list.", event.threadID);
+    }
+  },
+
+  onReply: async function ({ api, event, Reply, args }) {
+    if (event.senderID !== Reply.author) return;
+
+    const index = parseInt(args[0]);
+    if (isNaN(index) || index < 1 || index > Reply.groupList.length) {
+      return api.sendMessage(
+        "❌ Invalid number. Reply with a valid group index.",
+        event.threadID,
+        event.messageID
+      );
+    }
 
     try {
-      const dataThreads = await api.getThreadList(100, null, ["INBOX"]);
-      const groups = dataThreads.filter(thread => thread.isGroup);
-      if (!groups.length) return api.sendMessage("There are currently no groups!", threadID);
+      const group = Reply.groupList[index - 1];
+      const info = await api.getThreadInfo(group.threadID);
 
-      // Sort groups by messageCount descending
-      groups.sort((a, b) => b.messageCount - a.messageCount);
 
-      let msg = "🎭 GROUP LIST 🎭\n\n";
-      const groupid = [];
-      const groupName = [];
+      let adminNames = [];
+      for (const a of info.adminIDs) {
+        const u = await api.getUserInfo(a.id);
+        adminNames.push(u[a.id].name);
+      }
 
-      groups.forEach((g, i) => {
-        msg += `${i + 1}. ${g.name}\n🔰TID: ${g.threadID}\n💌MessageCount: ${g.messageCount}\n\n`;
-        groupid.push(g.threadID);
-        groupName.push(g.name);
-      });
 
-      msg += "Reply to this message with: <ban | unban | del | out> + number or 'all'";
+      const members = [];
+      for (const id of info.participantIDs.slice(0, 40)) {
+        const u = await api.getUserInfo(id);
+        members.push(u[id].name);
+      }
 
-      api.sendMessage(msg, threadID, (err, info) => {
-        global.GoatBot.onReply.set(info.messageID, {
-          commandName,
-          messageID: info.messageID,
-          author: event.senderID,
-          groupid,
-          groupName,
-          unsendTimeout: setTimeout(() => api.unsendMessage(info.messageID), this.config.countDown * 1000)
-        });
-      }, messageID);
+      const approval =
+        info.approvalMode === true ? "ON" :
+        info.approvalMode === false ? "OFF" : "Unknown";
 
-    } catch (error) {
-      console.error(error);
-      api.sendMessage("Error fetching group list.", threadID);
+      const result =
+`┏━━━━━━━━━━━━━━━
+┃ 🕵️‍♂️ 𝗚𝗥𝗢𝗨𝗣 𝗗𝗘𝗧𝗔𝗜𝗟𝗦
+┣━━━━━━━━━━━━━━━
+┃ 👥 Name      : ${info.threadName}
+┃ 🆔 TID       : ${info.threadID}
+┃ 🔐 Approval  : ${approval}
+┃ 😄 Emoji     : ${info.emoji || "None"}
+┃ 👑 Admins    : ${adminNames.join(" • ") || "None"}
+┃ 💬 Messages  : ${info.messageCount}
+┃ 👤 Members   : ${info.participantIDs.length}
+┣━━━━━━━━━━━━━━━━━
+┃ 📋 Member List (partial)
+┃ ${members.join(" │ ")}
+┗━━━━━━━━━━━━━━━━━`;
+
+      api.sendMessage(result, event.threadID, event.messageID);
+    } catch (err) {
+      console.error("spygc reply error:", err);
+      api.sendMessage("❌ Failed to load group info.", event.threadID, event.messageID);
+    } finally {
+      global.GoatBot.onReply.delete(event.messageID);
     }
-  },
-
-  onReply: async function ({ event, Reply, api }) {
-    const { author, groupid, groupName, messageID } = Reply;
-    if (event.senderID !== author) return;
-
-    const args = event.body.trim().toLowerCase().split(" ");
-    clearTimeout(Reply.unsendTimeout);
-
-    const action = args[0];
-    const index = parseInt(args[1]) - 1;
-
-    if (!["ban", "unban", "del", "out"].includes(action)) {
-      return api.sendMessage("Invalid action. Use: ban, unban, del, out", event.threadID);
-    }
-
-    if (args[1] === "all") {
-      for (let i = 0; i < groupid.length; i++) {
-        await processGroup(action, i);
-      }
-      return api.sendMessage(`✅ ${action.toUpperCase()} executed on all groups.`, event.threadID);
-    } else {
-      if (index < 0 || index >= groupid.length) return api.sendMessage("Invalid number!", event.threadID);
-      await processGroup(action, index);
-    }
-
-    async function processGroup(act, i) {
-      const idgr = groupid[i];
-      const gName = groupName[i];
-      const Threads = global.GoatBot.Threads;
-
-      if (act === "ban") {
-        const data = (await Threads.getData(idgr)).data || {};
-        data.banned = 1;
-        data.dateAdded = moment.tz("Asia/Dhaka").format("HH:mm:ss L");
-        await Threads.setData(idgr, { data });
-        global.data.threadBanned.set(idgr, { dateAdded: data.dateAdded });
-        api.sendMessage(`✅ Banned: ${gName}`, event.threadID);
-      }
-
-      if (act === "unban") {
-        const data = (await Threads.getData(idgr)).data || {};
-        data.banned = 0;
-        data.dateAdded = null;
-        await Threads.setData(idgr, { data });
-        global.data.threadBanned.delete(idgr);
-        api.sendMessage(`✅ Unbanned: ${gName}`, event.threadID);
-      }
-
-      if (act === "del") {
-        const data = (await Threads.getData(idgr)).data || {};
-        await Threads.delData(idgr, { data });
-        api.sendMessage(`✅ Data deleted: ${gName}`, event.threadID);
-      }
-
-      if (act === "out") {
-        api.removeUserFromGroup(api.getCurrentUserID(), idgr);
-        api.sendMessage(`✅ Bot removed from: ${gName}`, event.threadID);
-      }
-    }
-
-    api.unsendMessage(messageID);
   }
 };
