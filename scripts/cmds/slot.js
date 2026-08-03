@@ -1,134 +1,125 @@
-const axios = require("axios");
 
-// 🔹 SAME API
-const API_URL = "https://balance-bot-api.onrender.com";
-
-// 🔹 Get balance
-async function getBalance(userID) {
-  try {
-    const res = await axios.get(`${API_URL}/api/balance/${userID}`);
-    return res.data.balance || 100;
-  } catch {
-    return 100;
-  }
-}
-
-// 🔹 Add balance
-async function winGame(userID, amount) {
-  try {
-    const res = await axios.post(`${API_URL}/api/balance/win`, { userID, amount });
-    return res.data.success ? res.data.balance : null;
-  } catch {
-    return null;
-  }
-}
-
-// 🔹 Lose balance
-async function loseGame(userID, amount) {
-  try {
-    const res = await axios.post(`${API_URL}/api/balance/lose`, { userID, amount });
-    return res.data.success ? res.data.balance : null;
-  } catch {
-    return null;
-  }
-}
-
-// 🔹 Slot Machine class
-class SlotMachine {
-  constructor() {
-    this.symbols = ["🍒","🍊","🍋","🍉","🍇","⭐","7️⃣","💎"];
-    this.payouts = {
-      "💎💎💎": 100, "7️⃣7️⃣7️⃣": 50, "⭐⭐⭐": 30,
-      "🍇🍇🍇": 20, "🍉🍉🍉": 15, "🍋🍋🍋": 10,
-      "🍊🍊🍊": 8, "🍒🍒🍒": 5
-    };
-  }
-
-  spin() {
-    const reels = [];
-    let isWin = Math.random() < 0.6; // 60% win chance
-
-    if(isWin) {
-      const winningCombos = Object.keys(this.payouts);
-      const combo = winningCombos[Math.floor(Math.random() * winningCombos.length)];
-      reels.push(...combo.split(''));
-    } else {
-      while(reels.length < 3) {
-        const symbol = this.symbols[Math.floor(Math.random() * this.symbols.length)];
-        reels.push(symbol);
-      }
-      const resultStr = reels.join('');
-      if(this.payouts[resultStr]) {
-        reels[0] = this.symbols[Math.floor(Math.random() * this.symbols.length)];
-      }
-    }
-
-    const result = reels.join('');
-    const multiplier = this.payouts[result] || 0;
-    return { reels, result, multiplier };
-  }
-}
-
-// 🔹 Format balance
-function formatBalance(num) {
-  return num.toLocaleString("en-US") + " $";
-}
-
-// 🔹 Create final spin message
-function createMessage(reels, bet, multiplier, newBalance) {
-  const spinDisplay = reels.map(r => r || "❓").join(" | ");
-  if(multiplier > 0) {
-    return `🎰 Sʟᴏᴛ Mᴀᴄʜɪɴᴇ 🎰\n\n[ ${spinDisplay} ]\n\n🎉 Win!\n💵 Bet: ${formatBalance(bet)}\n✅ Won: ${formatBalance(bet*multiplier)}\n💳 New Balance: ${formatBalance(newBalance)}`;
-  } else {
-    return `🎰 Sʟᴏᴛ Mᴀᴄʜɪɴᴇ 🎰\n\n[ ${spinDisplay} ]\n\n💀 Loss\n💰 Bet: ${formatBalance(bet)}\n❌ Won: 0 $\n💳 New Balance: ${formatBalance(newBalance)}`;
-  }
-}
-
-// 🔹 Module exports
 module.exports = {
   config: {
     name: "slot",
-    aliases: ["spin"],
-    version: "1.2",
-    author: "Mᴏʜᴀᴍᴍᴀᴅ Aᴋᴀsʜ",
+    version: "1.0",
+    author: "SIFAT",
+    countDown: 5,
     role: 0,
-    shortDescription: "Slot Machine 60% Win (Reply Based)",
-    category: "economy"
+    category: "game",
+    description: "🎰 𝖧𝗒𝗉𝖾𝗋-𝖲𝗅𝗈𝗍 𝖬𝖺𝖼𝗁𝗂𝗇𝖾 𝗐𝗂𝗍𝗁 𝖲𝗆𝖺𝗋𝗍 𝖡𝖺𝗅𝖺𝗇𝖼𝖾",
+    usage: "slot <amount>\nSupports: 50k, 1.5m, 2b, all"
   },
 
-  onStart: async function({ api, event, args }) {
-    const { threadID, senderID, messageID } = event;
+  onStart: async function ({ event, api, usersData, args }) {
+    const { threadID, messageID, senderID } = event;
+    const userData = await usersData.get(senderID);
+    let money = userData.money;
 
-    const currentBalance = await getBalance(senderID);
-    const slot = new SlotMachine();
 
-    let bet = args[0]?.toLowerCase() === "max" ? Math.floor(currentBalance*0.1) : parseFloat(args[0]);
-    if(isNaN(bet) || bet < 10) bet = 10;
-    if(bet > currentBalance) return api.sendMessage(
-      `❌ Insufficient Balance\n💳 Balance: ${formatBalance(currentBalance)}\n💰 Bet: ${formatBalance(bet)}`,
-      threadID,
-      messageID // ✅ reply to command
-    );
+    const fonts = {
+      "a":"A","b":"ʙ","c":"ᴄ","d":"ᴅ","e":"ᴇ","f":"ꜰ","g":"ɢ","h":"ʜ","i":"ɪ","j":"ᴊ","k":"ᴋ","l":"ʟ","m":"ᴍ",
+      "n":"ɴ","o":"ᴏ","p":"ᴘ","q":"ǫ","r":"ʀ","s":"ꜱ","t":"ᴛ","u":"ᴜ","v":"ᴠ","w":"ᴡ","x":"x","y":"ʏ","z":"ᴢ",
+      "0": "𝟎", "1": "𝟏", "2": "𝟐", "3": "𝟑", "4": "𝟒", "5": "𝟓", "6": "𝟔", "7": "𝟕", "8": "𝟖", "9": "𝟗", ".": ".", "+": "+", "-": "-"
+    };
+    const stylize = (text) => text.toString().split('').map(char => fonts[char] || char).join('');
 
-    // Initial spin message
-    const spinMsg = await api.sendMessage(
-      `🎰 Sʟᴏᴛ Mᴀᴄʜɪɴᴇ 🎰\n\n[ 🍉 | ❓ | ❓ ]\n\nSpinning...`,
-      threadID,
-      messageID // ✅ reply to command
-    );
-    await new Promise(r => setTimeout(r, 1500));
 
-    // Spin reels
-    const spinResult = slot.spin();
-    const winAmount = Math.floor(bet * spinResult.multiplier);
+    const formatMoney = (num) => {
+      if (Math.abs(num) >= 1.0e+12) return (Math.abs(num) / 1.0e+12).toFixed(2) + "T";
+      if (Math.abs(num) >= 1.0e+9) return (Math.abs(num) / 1.0e+9).toFixed(2) + "B";
+      if (Math.abs(num) >= 1.0e+6) return (Math.abs(num) / 1.0e+6).toFixed(2) + "M";
+      if (Math.abs(num) >= 1.0e+3) return (Math.abs(num) / 1.0e+3).toFixed(2) + "K";
+      return Math.abs(num).toFixed(0);
+    };
 
-    // Update balance
-    let newBalance;
-    if(winAmount > 0) newBalance = await winGame(senderID, winAmount);
-    else newBalance = await loseGame(senderID, bet);
+    const parseBet = (input) => {
+      if (!input) return 0;
+      const str = input.toLowerCase();
 
-    // Final message
-    const finalMsg = createMessage(spinResult.reels, bet, spinResult.multiplier, newBalance);
-    await api.editMessage(finalMsg, spinMsg.messageID, threadID);
+      if (str === 'all' || str === 'max') return money;
+
+      let val = parseFloat(str);
+      if (isNaN(val)) return 0;
+
+      if (str.includes('t')) return val * 1e12;
+      if (str.includes('b')) return val * 1e9;
+      if (str.includes('m')) return val * 1e6;
+      if (str.includes('k')) return val * 1e3;
+      return val;
+    };
+
+    const bet = parseBet(args[0]);
+
+
+    if (bet < 50) return api.sendMessage(`⚠️ ${stylize("Minimum bet is 50$")}`, threadID, messageID);
+    if (isNaN(bet)) return api.sendMessage(`⚠️ ${stylize("Invalid Amount.")}`, threadID, messageID);
+    if (money < bet) return api.sendMessage(`💳 ${stylize("Insufficient Funds.")}\n${stylize("You have: " + formatMoney(money))}`, threadID, messageID);
+
+
+    await usersData.set(senderID, { money: money - bet });
+    const symbols = ["🇧🇩", "🇮🇩", "🏴‍☠️", "🇦🇷", "🇯🇵", "🇵🇰"];
+    let s1, s2, s3;
+    const chance = Math.random();
+
+
+    if (chance < 0.15) {
+      s1 = s2 = s3 = symbols[Math.floor(Math.random() * symbols.length)];
+    } else if (chance < 0.55) {
+      s1 = s2 = symbols[Math.floor(Math.random() * symbols.length)];
+      s3 = symbols.filter(s => s !== s1)[Math.floor(Math.random() * (symbols.length - 1))];
+    } else {
+      const shuffled = [...symbols].sort(() => 0.5 - Math.random());
+      [s1, s2, s3] = [shuffled[0], shuffled[1], shuffled[2]];
+    }
+
+    let winnings = 0;
+    let status = "🦖 𝖫𝖮𝖲𝖲";
+    let multiplier = 0;
+
+    if (s1 === s2 && s2 === s3) {
+      winnings = bet * 15;
+      status = "💎 𝖩𝖠𝖢𝖪𝖯𝖮𝖳";
+      multiplier = 15;
+    } else if (s1 === s2 || s1 === s3 || s2 === s3) {
+      winnings = bet * 3;
+      status = "✨ 𝖶𝖨𝖭";
+      multiplier = 3;
+    }
+
+    const finalBalance = (money - bet) + winnings;
+    await usersData.set(senderID, { money: finalBalance });
+
+    const msgInstance = await api.sendMessage(`｢ 🎰 ｣ 𝖲𝖸𝖲𝖳𝖤𝖬 𝖲𝖳𝖠𝖱𝖳...`, threadID, messageID);
+
+    const frames = [
+      { s: ["🔄", "🔄", "🔄"], txt: "𝗜𝗡𝗜𝗧𝗜𝗔𝗟𝗜𝗭𝗜𝗡𝗚" },
+      { s: [symbols[1], symbols[4], "🔄"], txt: "𝗦𝗬𝗡𝗖𝗛𝗥𝗢𝗡𝗜𝗭𝗜𝗡𝗚" },
+      { s: ["🔄", symbols[0], symbols[5]], txt: "𝗖𝗔𝗟𝗜𝗕𝗥𝗔𝗧𝗜𝗡𝗚" },
+      { s: [s1, s2, s3], txt: "𝗖𝗢𝗠𝗣𝗟𝗘𝗧𝗘𝗗" }
+    ];
+
+    for (let i = 0; i < frames.length; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      const isLast = i === frames.length - 1;
+
+      const profitDisplay = isLast
+        ? (winnings > 0 ? `+${formatMoney(winnings)}` : `-${formatMoney(bet)}`)
+        : "---";
+
+
+      const ui =
+        `   ◢ ${stylize("SLOTS MACHINE")} ◣\n` +
+        `╭───────────────╮\n` +
+        `│    ${frames[i].s[0]}  │  ${frames[i].s[1]}  │  ${frames[i].s[2]}  │\n` +
+        `╰───────────────╯\n` +
+        `◈ 𝖲𝖳𝖠𝖳𝖴𝖲: ${isLast ? stylize(status) : stylize(frames[i].txt)}\n` +
+        `────────────────────\n` +
+        `⌬ 𝖡𝖤𝖳 : ${stylize(formatMoney(bet))}\n` +
+        `⌬ 𝖶𝖨𝖭 : ${stylize(profitDisplay)}\n` +
+        `⌬ 𝖡𝖠𝖫 : ${stylize(formatMoney(finalBalance))}`;
+
+      await api.editMessage(ui, msgInstance.messageID, threadID);
+    }
   }
 };
